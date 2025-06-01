@@ -1,0 +1,110 @@
+﻿
+<EditForm Model="UserModel" OnValidSubmit="OnValidSubmit" class="styled-form">
+    <DataAnnotationsValidator />
+    <ValidationSummary class="text-danger mb-3" />
+
+    <div class="form-group">
+        <label>Имя:</label>
+        <InputText @bind-Value="UserModel.Name" class="form-control" />
+    </div>
+
+    <div class="form-group">
+        <label>Email:</label>
+        <InputText @bind-Value="UserModel.Email" class="form-control" />
+    </div>
+
+    <div class="form-group">
+        <label>Телефон:</label>
+        <InputText @bind-Value="UserModel.Phone" class="form-control" />
+    </div>
+
+    <div class="form-group">
+        <label>Пол:</label>
+        <InputSelect @bind-Value="UserModel.Gender" TValue="Gender" class="form-control">
+            <option value="">Выберите</option>
+            @foreach (var gender in Enum.GetValues<Gender>())
+            {
+                <option value="@gender">@gender</option>
+            }
+        </InputSelect>
+    </div>
+
+    <div class="form-group">
+        <label>Дата рождения:</label>
+        <InputDate @bind-Value="UserModel.DateOfBirth" TValue="DateTime" class="form-control" />
+    </div>
+
+    <div class="form-group">
+        <label>Направление стажировки:</label>
+        <input class="form-control"
+               list="internship-directions"
+               value="@InternshipDirectionName"
+               @oninput="OnInternshipDirectionInput" />
+        <datalist id="internship-directions">
+            @foreach (var name in InternshipDirectionNames)
+            {
+                <option value="@name" />
+            }
+        </datalist>
+    </div>
+
+    <div class="form-group">
+        <label>Проект:</label>
+        <input class="form-control"
+               list="current-projects"
+               value="@CurrentProjectName"
+               @oninput="OnCurrentProjectInput" />
+        <datalist id="current-projects">
+            @foreach (var name in CurrentProjectNames)
+            {
+                <option value="@name" />
+            }
+        </datalist>
+    </div>
+
+    <button type="submit" class="btn btn-primary mt-3">Сохранить</button>
+</EditForm>
+
+@code {
+    [Parameter]
+    public UserDto UserModel { get; set; } = default!;
+
+    [Parameter]
+    public EventCallback OnValidSubmit { get; set; }
+
+    [Parameter]
+    public List<string> InternshipDirectionNames { get; set; } = new();
+
+    [Parameter]
+    public List<string> CurrentProjectNames { get; set; } = new();
+
+    [Parameter]
+    public string InternshipDirectionName { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<string> InternshipDirectionNameChanged { get; set; }
+
+    [Parameter]
+    public string CurrentProjectName { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<string> CurrentProjectNameChanged { get; set; }
+    
+    private async Task OnInternshipDirectionInput(ChangeEventArgs e)
+    {
+        InternshipDirectionName = e.Value?.ToString();
+        await InternshipDirectionNameChanged.InvokeAsync(InternshipDirectionName);
+    }
+
+    private async Task OnCurrentProjectInput(ChangeEventArgs e)
+    {
+        CurrentProjectName = e.Value?.ToString();
+        await CurrentProjectNameChanged.InvokeAsync(CurrentProjectName);
+    }
+    
+    protected override async Task OnInitializedAsync()
+    {
+        InternshipDirectionName = string.Empty;
+        CurrentProjectName = string.Empty;
+    }
+}

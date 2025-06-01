@@ -1,0 +1,133 @@
+﻿@page "/edit-project/{id:guid}"
+@inject UserService UserService
+@inject CurrentProjectService CurrentProjectService
+@inject NavigationManager NavigationManager
+
+<div class="edit-direction-container">
+    <button class="btn btn-secondary mb-3" @onclick='() => NavigationManager.NavigateTo("/")'>
+        На главную страницу
+    </button>
+    <h3>Страница редактирования проекта</h3>
+
+    @if (errorMessadge != null)
+    {
+        <p class="error-message">@errorMessadge</p>
+    }
+
+    @if (project == null)
+    {
+        <p>Загрузка...</p>
+    }
+    else
+    {
+        <div class="input-group">
+            <label>Название проекта:</label>
+            <input class="form-control w-auto"
+                   @bind="project.Name"
+                   @bind:event="onchange" />
+            <button class="btn btn-sm btn-primary mt-2" @onclick="@(() =>
+                            CurrentProjectService.UpdateOrAddCurrentProjectAsync(project))">Сохранить имя</button>
+        </div>
+
+        <details class="mb-3">
+            <summary>Показать стажеров</summary>
+            <ul>
+                @foreach (var user in project.Users)
+                {
+                    <li class="user-card">
+                        <p><strong>Имя:</strong> @user.Name</p>
+                        <p><strong>Email:</strong> @user.Email</p>
+                        <p><strong>Пол:</strong> @user.Gender</p>
+                    </li>
+                }
+            </ul>
+        </details>
+
+        <div class="input-group">
+            <label><strong>Введите Email пользователя, которого хотите добавить в проект:</strong></label>
+            <input class="form-control w-auto"
+                   @bind="StartOfUserEmail"
+                   @bind:event="onchange" />
+            <div class="mt-2">
+                <button class="btn btn-sm btn-primary" @onclick="@(() => { IsAddNewUser = true; })">Начать поиск</button>
+
+                @if (IsAddNewUser && suggestedUsers.ToList().Count == 1)
+                {
+                    <button class="btn btn-sm btn-success mx-1" @onclick="ChangeUserProject">Изменить проект у пользователя</button>
+                }
+            </div>
+        </div>
+
+        @if (IsAddNewUser)
+        {
+            <ul class="mt-3">
+                @foreach (var user in suggestedUsers)
+                {
+                    <li class="user-card">
+                        <p><strong>Имя:</strong> @user.Name</p>
+                        <p><strong>Email:</strong> @user.Email</p>
+                        <p><strong>Пол:</strong> @user.Gender</p>
+                    </li>
+                }
+            </ul>
+        }
+    }
+</div>
+
+    
+
+@code {
+    [Parameter]
+    public Guid id { get; set; }
+
+    private CurrentProjectDto project;
+
+    private IEnumerable<UserDtoForDataTransmission> suggestedUsers;
+    
+    private bool IsAddNewUser;
+
+    private string? errorMessadge = null;
+    
+    private string startOfUserEmail = "";
+    private string StartOfUserEmail
+    {
+        get => startOfUserEmail;
+        set
+        {
+            if (startOfUserEmail != value)
+            {
+                startOfUserEmail = value;
+                suggestedUsers = UserService.Distinct(UserService.GetAllUsersStartsOn(startOfUserEmail), project.Users);
+                errorMessadge = null;
+            }
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        project = await CurrentProjectService.GetCurrentProjectAsync(id);
+        if (project == null)
+        {
+            project = new CurrentProjectDto() { Id = id, Name = "Имя", Users = new List<UserDtoForDataTransmission>() };
+        }
+        suggestedUsers = UserService.Distinct(UserService.GetAllUsersStartsOn(startOfUserEmail), project.Users);
+    }
+    
+    public async Task ChangeUserProject()
+    {
+        if (!IsAddNewUser)
+            return;
+        if (suggestedUsers.ToList().Count == 1)
+        {
+            await UserService.ChangeOrCreateProjectOfUser(suggestedUsers.First(), project);
+            errorMessadge = null;
+            NavigationManager.NavigateTo($"/edit-project/{id}");
+        }
+        else
+        {
+            errorMessadge = "Необходимо найти одного пользователя";
+        }
+    }
+    
+}
+

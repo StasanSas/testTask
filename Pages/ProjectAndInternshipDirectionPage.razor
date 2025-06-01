@@ -1,0 +1,289 @@
+﻿@page "/"
+@using System.Threading
+@inject UserService UserService
+@inject InternshipDirectionService InternshipDirectionService
+@inject CurrentProjectService CurrentProjectService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+
+<h3 class="section-title">Актуальные проекты</h3>
+
+<div class="action-buttons mb-3">
+    <button class="btn btn-secondary me-2" @onclick='() => NavigationManager.NavigateTo("/user-add")'>
+        На страницу создания пользователя
+    </button>
+    <button class="btn btn-secondary" @onclick='() => NavigationManager.NavigateTo("/users")'>
+        На страницу списка пользователей
+    </button>
+</div>
+
+<div class="search-filter-wrapper mb-4">
+    <input placeholder="Поиск по названию"
+           @bind="SearchTerm"
+           @bind:event="oninput"
+           class="form-control search-input mb-2" />
+
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <label class="me-2">Сортировать по:</label>
+        <select class="form-select w-auto me-2" @bind="SortBy">
+            <option value="name">Названию</option>
+            <option value="interns">Кол-ву стажеров</option>
+        </select>
+
+        <label class="me-1">Кол-во элементов:</label>
+        <input type="number"
+               class="form-control w-auto me-2"
+               @bind="AmountElements"
+               min="1"
+               @bind:event="onchange" />
+
+        <label class="me-1">Страница:</label>
+        <input type="number"
+               class="form-control w-auto"
+               @bind="IndexPage"
+               min="1"
+               @bind:event="onchange" />
+    </div>
+</div>
+
+<div class="projects-directions-wrapper">
+    <div class="project-list">
+        <h4>Проекты</h4>
+        <ul>
+            @foreach (var project in listProjects)
+            {
+                <li class="item-card">
+                    <strong>@project.Name</strong> — Студенты: @(project.Users?.Count ?? 0)
+                    <div class="mt-1">
+                        <button class="btn btn-sm btn-primary mx-1" @onclick="@(() => EditProject(project))">Редактировать</button>
+                        <button class="btn btn-sm btn-danger mx-1" @onclick="@(() => TryDeleteProject(project))">Удалить</button>
+                    </div>
+                    <details class="mt-2">
+                        <summary>Показать студентов</summary>
+                        <ul>
+                            @foreach (var intern in project.Users)
+                            {
+                                <li>@intern.Name</li>
+                            }
+                        </ul>
+                    </details>
+                </li>
+            }
+            <li><button class="btn btn-sm btn-primary mx-1" @onclick="@(CreateProject)">Создать</button></li>
+        </ul>
+    </div>
+
+    <div class="direction-list">
+        <h4>Направления</h4>
+        <ul>
+            @foreach (var project in listDirrections)
+            {
+                <li class="item-card">
+                    <strong>@project.Name</strong> — Студенты: @(project.Users?.Count ?? 0)
+                    <div class="mt-1">
+                        <button class="btn btn-sm btn-primary mx-1" @onclick="@(() => EditInternshipDirection(project))">Редактировать</button>
+                        <button class="btn btn-sm btn-danger mx-1" @onclick="@(() => TryDeleteInternshipDirection(project))">Удалить</button>
+                    </div>
+                    <details class="mt-2">
+                        <summary>Показать студентов</summary>
+                        <ul>
+                            @foreach (var intern in project.Users)
+                            {
+                                <li>@intern.Name</li>
+                            }
+                        </ul>
+                    </details>
+                </li>
+            }
+            <li><button class="btn btn-sm btn-primary mx-1" @onclick="@(CreateInternshipDirection)">Создать</button></li>
+        </ul>
+    </div>
+</div>
+
+@code {
+    private int activeTab = 0;
+    private string searchTerm;
+    private string SearchTerm
+    {
+        get => searchTerm;
+        set
+        {
+            if (searchTerm != value)
+            {
+                searchTerm = value;
+                _viewMode.PaginationMode.indexPage = 1;
+                Reload();
+            }
+        }
+    }
+
+    private string sortBy;
+    private string SortBy
+    {
+        get => sortBy;
+        set
+        {
+            if (sortBy != value)
+            {
+                sortBy = value;
+                Reload();
+            }
+        }
+    }
+    
+    private int AmountElements
+    {
+        get => _viewMode.PaginationMode.amountElementsOnPage;
+        set
+        {
+            if (_viewMode.PaginationMode.amountElementsOnPage != value)
+            {
+                _viewMode.PaginationMode.amountElementsOnPage = value;
+                Reload();
+            }
+        }
+    }
+
+    private int IndexPage
+    {
+        get => _viewMode.PaginationMode.indexPage;
+        set
+        {
+            if (_viewMode.PaginationMode.indexPage != value)
+            {
+                _viewMode.PaginationMode.indexPage = value;
+                Reload();
+            }
+        }
+    }
+
+    private List<CurrentProjectDto> listProjects = new();
+    private List<InternshipDirectionDto> listDirrections = new();
+    
+
+    private ViewMode _viewMode = new()
+    {
+        FilteringMode = new FilteringMode { filter = default(Func<IViewedEntityWitchHaveUsers, bool>) },
+        PaginationMode = new PaginationMode { amountElementsOnPage = 3, indexPage = 1 },
+        SortMode = new SortMode { comporator = default(Func<IViewedEntityWitchHaveUsers, IComparable>) }
+    };
+    
+
+    protected override async Task OnInitializedAsync()
+    {
+        LoadFromUri();
+        Reload();
+    }
+    
+    private void Reload()
+    {
+        ReloadAsync().WaitAsync(CancellationToken.None);
+    }
+
+    private async Task ReloadAsync()
+    {
+        ApplyFiltersAndSorts();
+
+        listProjects = await CurrentProjectService.GetViewCurrentProjects(_viewMode);
+        listDirrections = await InternshipDirectionService.GetViewInternshipDirections(_viewMode);
+
+        SaveToUri();
+        StateHasChanged();
+    }
+
+
+    private void ApplyFiltersAndSorts()
+    {
+        _viewMode.FilteringMode.filter = default(Func<IViewedEntityWitchHaveUsers, bool>);
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            _viewMode.FilteringMode.filter = p => p.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase);
+        }
+
+        _viewMode.SortMode.comporator = default(Func<IViewedEntityWitchHaveUsers, IComparable>);
+        if (sortBy == "name")
+        {
+            _viewMode.SortMode.comporator = p => p.Name;
+        }
+        else if (sortBy == "interns")
+        {
+            _viewMode.SortMode.comporator = p => -p.Users.Count;
+        }
+    }
+
+    private void SaveToUri()
+    {
+        var uri = NavigationManager.GetUriWithQueryParameters(new Dictionary<string, object?>
+        {
+            ["search"] = searchTerm,
+            ["sort"] = sortBy,
+            ["page"] = _viewMode.PaginationMode.indexPage,
+            ["size"] = _viewMode.PaginationMode.amountElementsOnPage
+        });
+        
+        if (NavigationManager.Uri != uri)
+        {
+            NavigationManager.NavigateTo(uri, forceLoad: false);
+        }
+    }
+
+    private void LoadFromUri()
+    {
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+
+        if (query.TryGetValue("search", out var search))
+            searchTerm = search;
+
+        if (query.TryGetValue("sort", out var sort))
+            sortBy = sort;
+
+        if (query.TryGetValue("page", out var pageStr) && int.TryParse(pageStr, out var page))
+            _viewMode.PaginationMode.indexPage = page;
+
+        if (query.TryGetValue("size", out var sizeStr) && int.TryParse(sizeStr, out var size))
+            _viewMode.PaginationMode.amountElementsOnPage = size;
+    }
+    
+    private async Task TryDeleteProject(CurrentProjectDto project)
+    {
+        if (project.Users.Any())
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Нельзя удалить проект '{project.Name}', так как прикреплены стажёры!");
+            return;
+        }
+        await CurrentProjectService.DeleteCurrentProjectsAsync(project.Id);
+        await ReloadAsync();
+    }
+    
+    private void EditProject(CurrentProjectDto project)
+    {
+        NavigationManager.NavigateTo($"/edit-project/{project.Id}");
+    }
+    
+    private void CreateProject()
+    {
+        NavigationManager.NavigateTo($"/edit-project/{Guid.NewGuid()}");
+    }
+    
+    private async Task TryDeleteInternshipDirection(InternshipDirectionDto internshipDirection)
+    {
+        if (internshipDirection.Users.Any())
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Нельзя удалить проект '{internshipDirection.Name}', так как прикреплены стажёры!");
+            return;
+        }
+        await InternshipDirectionService.DeleteInternshipDirectionsAsync(internshipDirection.Id);
+        await ReloadAsync();
+    }
+    
+    private void EditInternshipDirection(InternshipDirectionDto internshipDirection)
+    {
+        NavigationManager.NavigateTo($"/edit-direction/{internshipDirection.Id}");
+    }
+    
+    private void CreateInternshipDirection()
+    {
+        NavigationManager.NavigateTo($"/edit-direction/{Guid.NewGuid()}");
+    }
+}

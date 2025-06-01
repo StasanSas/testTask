@@ -1,0 +1,118 @@
+﻿@page "/users"
+@inject UserService UserService
+@inject InternshipDirectionService InternshipDirectionService
+@inject CurrentProjectService CurrentProjectService
+@inject NavigationManager NavigationManager
+
+<button class="btn btn-secondary mb-3" @onclick='() => NavigationManager.NavigateTo("/")'>
+    На главную страницу
+</button>
+
+<h3 class="section-title">Страница пользователей</h3>
+
+@if (editedUser != null)
+{
+    <FormEditUser UserModel="@editedUser"
+                  OnValidSubmit="HandleValidSubmit"
+                  InternshipDirectionNames="@internshipDirectionNames"
+                  CurrentProjectNames="@currentProjectNames"
+                  InternshipDirectionName="@directionNames[editedUser.InternshipDirectionId]"
+                  InternshipDirectionNameChanged="@((string val) => InternshipDirectionName = val)"
+                  CurrentProjectName="@projectNames[editedUser.CurrentProjectId]"
+                  CurrentProjectNameChanged="@((string val) => CurrentProjectName = val)" />
+}
+else
+{
+    <div class="filter-panel">
+        <label class="me-2">Сортировать по:</label>
+        <select class="form-select w-auto"
+                @bind="OrderBy">
+            <option value="without">Не выбрано</option>
+            <option value="project">Проекту</option>
+            <option value="direction">Направлению</option>
+        </select>
+    </div>
+
+    <ul class="user-list">
+        @foreach (var user in users)
+        {
+            <li>
+                <p><strong>Имя:</strong> @user.Name</p>
+                <p><strong>Email:</strong> @user.Email</p>
+                <p><strong>Пол:</strong> @user.Gender</p>
+                <p><strong>Направление:</strong> @directionNames[user.InternshipDirectionId]</p>
+                <p><strong>Проект:</strong>  @projectNames[user.CurrentProjectId]</p>
+                <div>
+                    <button class="btn btn-sm btn-primary mx-1" @onclick="@(() => editedUser = user)">Редактировать</button>
+                </div>
+            </li>
+        }
+    </ul>
+}
+
+
+
+
+@code {
+    private List<UserDtoForDataTransmission> users = new();
+    private List<String> internshipDirectionNames = new();
+    private List<String> currentProjectNames = new();
+    
+    private UserDtoForDataTransmission? editedUser = null;
+
+    private String? InternshipDirectionName;
+    private String? CurrentProjectName;
+
+    private String orderBy = "without";
+
+    private Dictionary<string, Func<UserDtoForDataTransmission, IComparable>> parseNameFilterOnFilter;
+    
+    private Dictionary<Guid, string> directionNames = new();
+    private Dictionary<Guid, string> projectNames = new();
+    
+    private String OrderBy { 
+        get => orderBy; 
+        set 
+        {
+            orderBy = value;
+            users = GetUsersWithFilters();
+        } 
+    }
+    
+    protected override async Task OnInitializedAsync()
+    {
+        parseNameFilterOnFilter = new Dictionary<string, Func<UserDtoForDataTransmission, IComparable>>()
+        {
+            ["project"] = user => CurrentProjectService.GetCurrentProject(user.CurrentProjectId)?.Name ?? "",
+            ["direction"] = user => InternshipDirectionService.GetInternshipDirection(user.InternshipDirectionId)?.Name ?? "",
+            ["without"] = user => 0
+        };
+        var directions = await InternshipDirectionService.GetAllInternshipDirectionsWithoutUsersAsync();
+        directionNames = directions.ToDictionary(d => d.Id, d => d.Name);
+        var projects = await CurrentProjectService.GetAllCurrentProjectsWithoutUsersAsync();
+        projectNames = projects.ToDictionary(p => p.Id, p => p.Name);
+        users = GetUsersWithFilters();
+        internshipDirectionNames = await InternshipDirectionService.GetAllInternshipDirectionNamesAsync();
+        currentProjectNames = await CurrentProjectService.GetAllCurrentProjectsNamesAsync();
+    }
+    
+    private List<UserDtoForDataTransmission> GetUsersWithFilters()
+    {
+        var filter = parseNameFilterOnFilter[orderBy];
+        return UserService.GetAllUsers().OrderBy(filter).ToList();
+    }
+    
+    private async Task HandleValidSubmit()
+    {
+        if (InternshipDirectionName == null)
+            throw new Exception();
+        if (CurrentProjectName == null)
+            throw new Exception();
+        editedUser.InternshipDirectionId = await InternshipDirectionService.CreateInternshipDirectionIfNotExistAsync(InternshipDirectionName);
+        editedUser.CurrentProjectId = await CurrentProjectService.CreateCurrentProjectIfNotExistAsync(CurrentProjectName);
+        editedUser.DateOfBirth = DateTime.SpecifyKind(editedUser.DateOfBirth, DateTimeKind.Utc);
+        await UserService.EditUserAsync(editedUser);
+        users = GetUsersWithFilters();
+        editedUser = null;
+    }
+}

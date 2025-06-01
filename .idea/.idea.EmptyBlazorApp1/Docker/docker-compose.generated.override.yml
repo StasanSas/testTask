@@ -1,0 +1,22 @@
+# This is a generated file. Not intended for manual editing.
+version: "3.8"
+services:
+  webapp:
+    build:
+      context: "C:\\Users\\Acer\\Desktop\\EmptyBlazorApp1"
+      dockerfile: "Dockerfile"
+      target: "build"
+    command: []
+    entrypoint:
+    - "dotnet"
+    - "/app/bin/Debug/net8.0/EmptyBlazorApp1.dll"
+    environment:
+      ASPNETCORE_STATICWEBASSETS: "/app/bin/Debug/net8.0/EmptyBlazorApp1.staticwebassets.runtime.CT.json"
+      DOTNET_USE_POLLING_FILE_WATCHER: "true"
+    image: "emptyblazorapp1:dev"
+    ports: []
+    volumes:
+    - "C:\\Users\\Acer\\.nuget\\packages:/root/.nuget/packages"
+    - "C:\\Users\\Acer\\Desktop\\EmptyBlazorApp1:/app:rw"
+    - "C:\\Users\\Acer\\Desktop\\EmptyBlazorApp1:/src:rw"
+    working_dir: "/app"

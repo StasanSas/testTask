@@ -1,0 +1,60 @@
+﻿@page "/user-add"
+@inject UserService UserService
+@inject InternshipDirectionService InternshipDirectionService
+@inject CurrentProjectService CurrentProjectService
+@inject NavigationManager NavigationManager
+
+<button class="btn btn-secondary mb-3" @onclick='() => NavigationManager.NavigateTo("/")'>
+    На главную страницу
+</button>
+
+<h3 class="section-title">Добавить нового пользователя</h3>
+
+<FormEditUser UserModel="@newUser"
+              OnValidSubmit="HandleValidSubmit"
+              InternshipDirectionNames="@internshipDirectionNames"
+              CurrentProjectNames="@currentProjectNames"
+              InternshipDirectionName="@InternshipDirectionName"
+              InternshipDirectionNameChanged="@((string val) => InternshipDirectionName = val)"
+              CurrentProjectName="@CurrentProjectName"
+              CurrentProjectNameChanged="@((string val) => CurrentProjectName = val)" />
+
+<h5 class="mt-4">Текущие пользователи:</h5>
+<ul class="user-list">
+    @foreach (var user in users)
+    {
+        <li>@user.Name</li>
+    }
+</ul>
+
+@code {
+    private List<UserDtoForDataTransmission> users = new();
+    private List<String> internshipDirectionNames = new();
+    private List<String> currentProjectNames = new();
+
+    private UserDtoForCreateUser newUser = new();
+
+    private String? InternshipDirectionName;
+    private String? CurrentProjectName;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        users = await UserService.GetAllUsersAsync();
+        internshipDirectionNames = await InternshipDirectionService.GetAllInternshipDirectionNamesAsync();
+        currentProjectNames = await CurrentProjectService.GetAllCurrentProjectsNamesAsync();
+    }
+    
+    private async Task HandleValidSubmit()
+    {
+        if (InternshipDirectionName == null)
+            throw new Exception();
+        if (CurrentProjectName == null)
+            throw new Exception();
+        newUser.InternshipDirectionId = await InternshipDirectionService.CreateInternshipDirectionIfNotExistAsync(InternshipDirectionName);
+        newUser.CurrentProjectId = await CurrentProjectService.CreateCurrentProjectIfNotExistAsync(CurrentProjectName);
+        newUser.DateOfBirth = DateTime.SpecifyKind(newUser.DateOfBirth, DateTimeKind.Utc);
+        await UserService.CreateUserAsync(newUser);
+        users = await UserService.GetAllUsersAsync();
+        newUser = new();
+    }
+}
